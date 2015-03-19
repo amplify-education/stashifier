@@ -64,8 +64,6 @@ def post_json(user=None, project=None, repository=None, api_path=None, post_data
                              headers={'Content-type': 'application/json'})
     if not resp.ok:
         raise ResponseError(resp)
-    else:
-        print resp.text
     return resp
 
 
@@ -83,9 +81,6 @@ def delete_repo(repository_name, user=None, project=None):
     resp = requests.api.delete(api_url, auth=(USERNAME, PASSWORD))
     if not resp.ok:
         raise ResponseError(resp)
-    else:
-        print "Deletion OK"
-        print resp.text
     return resp
 
 
@@ -93,8 +88,8 @@ def main():
     import getpass
     from argparse import ArgumentParser
     import os
+    from .models import StashRepo
     logging.basicConfig()
-    logging.getLogger().setLevel(logging.DEBUG)
     parser = ArgumentParser()
     parser.add_argument("-o", "--organization", action="store", dest="org",
                         help=("Github organization or Stash project to query for repositories to clone."
@@ -103,20 +98,32 @@ def main():
                         help="User to query for repositories to clone.  Either this or -o is required.")
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="DELETE IT.")
-
+    parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
     parser.add_argument("repo_name", nargs=1)
     args = parser.parse_args()
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    # silly approach that avoids hard-coding the stash repo
     config = SafeConfigParser()
     config.read(os.path.join(os.environ["HOME"], ".stashclientcfg"))
     global STASH_HOST
     STASH_HOST = config.get('server', 'hostname')
+
     username = os.environ["USER"]
     password = getpass.getpass("Stash password for %s: " % username)
     set_creds(username, password)
+
     if args.delete:
         resp = delete_repo(args.repo_name[0], user=args.user, project=args.org)
+        if resp.text:
+            print "Deletion OK: %s" % resp.json().get('message')
+        else:
+            print "Deletion attempt succeeded with status %d: %s" % (resp.status_code, resp.reason)
     else:
         resp = create_repo(args.repo_name[0], user=args.user, project=args.org)
+        repo = StashRepo(resp.json())
+        print "Successfully created repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
+
 
 if '__main__' == __name__:
     try:
