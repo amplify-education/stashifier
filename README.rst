@@ -3,7 +3,11 @@ stash_client
 
 Stash client library for Amplify utilities.
 
+To use (trivially): 
 
+* mkvirtualenv stashclient -r requirements.pip
+* ./setup.py develop
+* python -mstashclient.rest -u mystashuser mynewreponame
 
 See Also
 ========
