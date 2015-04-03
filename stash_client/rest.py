@@ -164,7 +164,7 @@ def main():
         print "Successfully created repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
     elif args.list_user_permissions:
         set_creds(args)
-        list_user_permissions(user=args.user, project=args.org)
+        list_user_permissions(project=args.org)
     else:
         print "No operation specified."
 
