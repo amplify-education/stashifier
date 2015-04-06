@@ -96,6 +96,8 @@ def main():
                               "  Either this or -u is required."))
     parser.add_argument("-u", "--user", action="store", dest="user",
                         help="User to query for repositories to clone.  Either this or -o is required.")
+    parser.add_argument("-U", "--override_user", action="store", dest="user_override",
+                        help="Override the local user for accessing stash.  If not specified, local user will be used.")
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="DELETE IT.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
@@ -110,6 +112,8 @@ def main():
     STASH_HOST = config.get('server', 'hostname')
 
     username = os.environ["USER"]
+    if args.user_override:
+        username = args.user_override
     password = getpass.getpass("Stash password for %s: " % username)
     set_creds(username, password)
 
