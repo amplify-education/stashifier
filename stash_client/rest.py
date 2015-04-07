@@ -7,11 +7,10 @@ import logging
 import os
 from ConfigParser import SafeConfigParser
 
+# for now, set at runtime from the config file (probably shouldn't be a constant anyway)
 STASH_HOST = None
 
 STASH_API_VERSION = '1.0'
-
-BASE_URL = 'https://%s/rest/api/%s' % (STASH_HOST, STASH_API_VERSION)
 
 _PROJECT_NAMESPACE = 'projects'
 _USER_NAMESPACE = 'users'
@@ -34,7 +33,7 @@ class ResponseError(Exception):
 
 def set_creds(args):
     import getpass
-    
+
     username = os.environ["USER"]
     if args.user_override:
         username = args.user_override
@@ -42,6 +41,7 @@ def set_creds(args):
     global USERNAME
     global PASSWORD
     (USERNAME, PASSWORD) = (username, password)
+
 
 def create_url(user=None, project=None, repository=None, api_path=None):
     if user is not None and project is not None:
@@ -73,6 +73,7 @@ def post_json(user=None, project=None, repository=None, api_path=None, post_data
         raise ResponseError(resp)
     return resp
 
+
 def get_json(user=None, project=None, repository=None, api_path=None, post_data=None):
     if post_data is None:
         raise Exception("POST data is not actually allowed to be None")
@@ -80,10 +81,11 @@ def get_json(user=None, project=None, repository=None, api_path=None, post_data=
     json_string = json.dumps(post_data)
     logging.debug("Posting %s to %s", json_string, api_url)
     resp = requests.api.get(api_url, data=json_string, auth=(USERNAME, PASSWORD),
-                             headers={'Content-type': 'application/json'})
+                            headers={'Content-type': 'application/json'})
     if not resp.ok:
         raise ResponseError(resp)
     return resp
+
 
 def create_repo(repository_name, user=None, project=None):
     if(repository_name is None):
@@ -93,19 +95,21 @@ def create_repo(repository_name, user=None, project=None):
     post_data = {'name': repository_name}
     return post_json(post_data=post_data, user=user, project=project, api_path=[_REPOSITORY_NAMESPACE])
 
-def list_user_permissions( user=None, project=None, group_name=None):
+
+def list_user_permissions(user=None, project=None, group_name=None):
     if project is None:
         raise UserError("Listing project permisisons needs a project")
     api_cmd = _PERMISSIONS + "/users"
-    post_data = {'filter':group_name}
+    post_data = {'filter': group_name}
     resp = get_json(post_data=post_data, user=user, project=project, api_path=[api_cmd])
     if resp.text:
         values = resp.json()["values"]
-        for value in values :
+        for value in values:
             print value["user"]["displayName"] + " : " + value["permission"]
     else:
         raise ResponseError("List users attempt failed with status %d: %s" % (resp.status_code, resp.reason))
-    
+
+
 def delete_repo(repository_name, user=None, project=None):
     if(repository_name is None):
         raise UserError("You must specify a repository")
@@ -117,6 +121,7 @@ def delete_repo(repository_name, user=None, project=None):
         raise ResponseError(resp)
     return resp
 
+
 def get_cmd_arguments():
     from argparse import ArgumentParser
     parser = ArgumentParser()
@@ -126,22 +131,25 @@ def get_cmd_arguments():
     parser.add_argument("-u", "--user", action="store", dest="user",
                         help="User to query for repositories to clone.  Either this or -o is required.")
     parser.add_argument("-U", "--override_user", action="store", dest="user_override",
-                        help="Override the local user for accessing stash.  If not specified, local user will be used.")
+                        help=("Override the local user for accessing stash.  "
+                              "If not specified, local user will be used."))
     parser.add_argument("-C", "--create", action="store_true", dest="create",
-                        help="Create a repo")
+                        help="Create a repository.")
     parser.add_argument("-perm", "--list_user_permissions", action="store_true", dest="list_user_permissions",
                         help="List the permissions for the users of this project")
     parser.add_argument("-D", action="store_true", dest="delete",
-                        help="DELETE IT.")
+                        help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
-    parser.add_argument("-r", "--repo_name", action="store", dest="repo_name", help="The name of the repository.")
+    parser.add_argument("-r", "--repo_name", action="store", dest="repo_name",
+                        help="The name of the repository.")
     return parser.parse_args()
-    
+
+
 def main():
     from .models import StashRepo
     logging.basicConfig()
     args = get_cmd_arguments()
-    
+
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     # silly approach that avoids hard-coding the stash repo
