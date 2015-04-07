@@ -55,7 +55,7 @@ setup(name=MODULE_NAME,
     test_suite = 'nose.collector',
     entry_points={
         'console_scripts': [
-            'stash_client = %s.rest:main' % MODULE_NAME,
+            'stash_client = %s.cli:main' % MODULE_NAME,
         ]
     },
 )
