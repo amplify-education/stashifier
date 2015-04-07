@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """setup.py controls the build, testing, and distribution of the egg"""
 
 from setuptools import setup, find_packages
@@ -10,7 +11,8 @@ VERSION_REGEX = re.compile(r"""
     ['"](?P<version>.*?)['"]
 """, re.MULTILINE | re.VERBOSE)
 
-VERSION_FILE = os.path.join("stash_client", "version.py")
+MODULE_NAME = "stash_client"
+VERSION_FILE = os.path.join(MODULE_NAME, "version.py")
 
 
 def get_version():
@@ -29,7 +31,7 @@ def get_requirements():
     with open("requirements.pip") as reqfile:
         return filter(lambda line: not line.startswith(('#', '-')), reqfile.read().split("\n"))
 
-setup(name='stash_client',
+setup(name=MODULE_NAME,
     version=get_version(),
     description="Stash client library for Amplify utilities.",
     long_description="""\
@@ -51,5 +53,9 @@ setup(name='stash_client',
     ],
     install_requires=get_requirements(),
     test_suite = 'nose.collector',
-    entry_points="",
+    entry_points={
+        'console_scripts': [
+            'stash_client = %s.cli:main' % MODULE_NAME,
+        ]
+    },
 )
