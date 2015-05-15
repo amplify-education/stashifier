@@ -29,6 +29,12 @@ class ResponseError(Exception):
         return "Application failure with status code %d: %s" % (
             self.response.status_code, self.response.reason)
 
+    def get_response_errors(self):
+        try:
+            return self.response.json()['errors']
+        except Exception as e:
+            logging.debug("Failed to read errors from Stash response: %s", str(e))
+            return None
 
 def set_host(hostname):
     logging.info("Stash host will be %s", hostname)
@@ -75,19 +81,19 @@ def post_json(user=None, project=None, repository=None, api_path=None, post_data
     resp = requests.api.post(api_url, data=json_string, auth=(USERNAME, PASSWORD),
                              headers={'Content-type': 'application/json'})
     if not resp.ok:
+        logging.debug("Failure with response body %s", resp.body)
         raise ResponseError(resp)
     return resp
 
 
-def get_json(user=None, project=None, repository=None, api_path=None, post_data=None):
-    if post_data is None:
-        raise Exception("POST data is not actually allowed to be None")
+def get(user=None, project=None, repository=None, api_path=None, query_params=None):
     api_url = create_url(user=user, project=project, repository=repository, api_path=api_path)
-    json_string = json.dumps(post_data)
-    logging.debug("Posting %s to %s", json_string, api_url)
-    resp = requests.api.get(api_url, data=json_string, auth=(USERNAME, PASSWORD),
+    logging.debug("Sending GET query params %s to %s", query_params, api_url)
+    resp = requests.api.get(api_url, params=query_params,
+                            auth=(USERNAME, PASSWORD),
                             headers={'Content-type': 'application/json'})
     if not resp.ok:
+        logging.debug("Failure with response body %s", resp.json())
         raise ResponseError(resp)
     return resp
 
@@ -101,12 +107,11 @@ def create_repo(repository_name, user=None, project=None):
     return post_json(post_data=post_data, user=user, project=project, api_path=[_REPOSITORY_NAMESPACE])
 
 
-def list_user_permissions(user=None, project=None, group_name=None):
+def list_user_permissions(user=None, project=None, filter_on=None):
     if project is None:
-        raise UserError("Listing project permisisons needs a project")
-    api_cmd = _PERMISSIONS + "/users"
-    post_data = {'filter': group_name}
-    resp = get_json(post_data=post_data, user=user, project=project, api_path=[api_cmd])
+        raise UserError("Listing project permissions needs a project")
+    post_data = {'filter': filter_on} if filter_on else None
+    resp = get(query_params=post_data, user=user, project=project, api_path=[_PERMISSIONS, _USER_NAMESPACE])
     if resp.text:
         values = resp.json()["values"]
         for value in values:

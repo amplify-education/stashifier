@@ -12,7 +12,7 @@ from .rest import UserError, ResponseError
 def get_cmd_arguments():
     from argparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument("-o", "--organization", action="store", dest="org",
+    parser.add_argument("-o", "--organization", "-p", "--project", action="store", dest="org",
                         help=("Github organization or Stash project to query for repositories to clone."
                               "  Either this or -u is required."))
     parser.add_argument("-u", "--user", action="store", dest="user",
@@ -22,17 +22,29 @@ def get_cmd_arguments():
                               "If not specified, local user will be used."))
     parser.add_argument("-C", "--create", action="store_true", dest="create",
                         help="Create a repository.")
-    parser.add_argument("-perm", "--list_user_permissions", action="store_true", dest="list_user_permissions",
+    parser.add_argument("-perm", "--list-user-permissions", action="store_true", dest="list_user_permissions",
                         help="List the permissions for the users of this project")
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
     parser.add_argument("-r", "--repo_name", action="store", dest="repo_name",
                         help="The name of the repository.")
+    parser.add_argument('positional_args', nargs='*')
     return parser.parse_args()
 
 
 def main():
+    try:
+        _main()
+    except KeyboardInterrupt:
+        pass
+    except UserError as oops:
+        print "Input error: %s" % str(oops)
+    except ResponseError as fail:
+        print "Response unhappy: %s" % str(fail)
+        print fail.get_response_errors()
+
+def _main():
     from .models import StashRepo
     logging.basicConfig()
     args = get_cmd_arguments()
@@ -52,23 +64,25 @@ def main():
         else:
             print "Deletion attempt succeeded with status %d: %s" % (resp.status_code, resp.reason)
     elif args.create:
+        if not args.repo_name and not args.positional_args:
+            raise UserError("Repository name must be specified either with -r or as an additional argument")
+        elif args.repo_name:
+            create_repo_name = args.repo_name
+        else:
+            create_repo_name = args.positional_args[0]
         rest.set_creds(args)
-        resp = rest.create_repo(args.repo_name, user=args.user, project=args.org)
+        resp = rest.create_repo(create_repo_name, user=args.user, project=args.org)
         repo = StashRepo(resp.json())
         print "Successfully created repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
     elif args.list_user_permissions:
+        filter_on = None
+        if args.positional_args:
+            filter_on = args.positional_args[0]
         rest.set_creds(args)
-        rest.list_user_permissions(project=args.org)
+        rest.list_user_permissions(project=args.org, filter_on=filter_on)
     else:
         print "No operation specified."
 
 
 if '__main__' == __name__:
-    try:
-        main()
-    except KeyboardInterrupt:
-        pass
-    except UserError as oops:
-        print "Input error: %s" % str(oops)
-    except ResponseError as fail:
-        print "Response unhappy: %s" % str(fail)
+    main()
