@@ -84,7 +84,7 @@ def post_json(user=None, project=None, repository=None, api_path=None, post_data
     resp = requests.api.post(api_url, data=json_string, auth=(USERNAME, PASSWORD),
                              headers={'Content-type': 'application/json'})
     if not resp.ok:
-        logging.debug("Failure with response body %s", resp.body)
+        logging.debug("Failure with response body %s", resp.text)
         raise ResponseError(resp)
     return resp
 
@@ -96,7 +96,7 @@ def get(user=None, project=None, repository=None, api_path=None, query_params=No
                             auth=(USERNAME, PASSWORD),
                             headers={'Content-type': 'application/json'})
     if not resp.ok:
-        logging.debug("Failure with response body %s", resp.json())
+        logging.debug("Failure with response body %s", resp.text)
         raise ResponseError(resp)
     return resp
 
