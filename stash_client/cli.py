@@ -20,8 +20,12 @@ def get_cmd_arguments():
     parser.add_argument("-U", "--override_user", action="store", dest="user_override",
                         help=("Override the local user for accessing stash.  "
                               "If not specified, local user will be used."))
+    parser.add_argument("--page-size", action="store", dest="page_size", type=int,
+                        help="Page size for paged responses")
     parser.add_argument("-C", "--create", action="store_true", dest="create",
                         help="Create a repository.")
+    parser.add_argument("-l", "--list-repos", action="store_true", dest="list_repos",
+                        help="List repositories available.")
     parser.add_argument("-perm", "--list-user-permissions", action="store_true", dest="list_user_permissions",
                         help="List the permissions for the users of this project")
     parser.add_argument("-D", action="store_true", dest="delete",
@@ -81,6 +85,12 @@ def _main():
             filter_on = args.positional_args[0]
         rest.set_creds(args)
         rest.list_user_permissions(project=args.org, filter_on=filter_on)
+    elif args.list_repos:
+        rest.set_creds(args)
+        repo_list = rest.list_repositories(project=args.org, user=args.user, limit=args.page_size)
+        print "Retrieved %d repos in %d pages" % (repo_list.entity_count, repo_list.page_count)
+        for repo in repo_list.entities:
+            print repo.name
     else:
         print "No operation specified."
 

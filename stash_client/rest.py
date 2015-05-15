@@ -6,6 +6,8 @@ import json
 import logging
 import os
 
+from .models import PagedApiPage, PagedApiResponse, StashRepo
+
 # for now, set at runtime from the config file (probably shouldn't be a constant anyway)
 STASH_HOST = None
 
@@ -108,6 +110,25 @@ def create_repo(repository_name, user=None, project=None):
         raise UserError("new repository needs a project or a user")
     post_data = {'name': repository_name}
     return post_json(post_data=post_data, user=user, project=project, api_path=[_REPOSITORY_NAMESPACE])
+
+
+def list_repositories(user=None, project=None, limit=None):
+    if user is None and project is None:
+        raise UserError("Repository list needs a project or a user")
+    response_pages = []
+    request_params = {}
+    if limit:
+        logging.debug("Using page size limit of %d", limit)
+        request_params['limit'] = limit
+    while True:
+        resp = get(user=user, project=project, query_params=request_params, api_path=[_REPOSITORY_NAMESPACE])
+        new_page = PagedApiPage(resp.json(), StashRepo)
+        response_pages.append(new_page)
+        if new_page.is_last_page:
+            break
+        else:
+            request_params['start'] = new_page.next_page_start
+    return PagedApiResponse(response_pages)
 
 
 def list_user_permissions(user=None, project=None, filter_on=None):

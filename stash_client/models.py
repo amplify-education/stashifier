@@ -5,7 +5,34 @@ to help us conceal the details of that JSON representation from the rest of the 
 import json
 
 
-class PagedApiPage(object):
+class StashEntity(object):
+    """
+    Parent class for all Stash response entities.
+    """
+    def __init__(self, response_data):
+        self._response_data = response_data
+
+    def _dump(self):
+        return json.dumps(self._response_data)
+
+
+class PagedApiResponse(object):
+    """
+    Container for multiple PagedApiPage objects.
+    """
+    def __init__(self, pages):
+        self._pages = pages
+        self.page_count = len(pages)
+        self.entities = []
+        self.values = []
+        for page in pages:
+            self.values.extend(page.values)
+            if page.entities:
+                self.entities.extend(page.entities)
+        self.entity_count = len(self.values)
+
+
+class PagedApiPage(StashEntity):
     """
     Paged responses take this format, according to the Stash API docs:
 
@@ -25,6 +52,7 @@ class PagedApiPage(object):
     """
 
     def __init__(self, response_data, entity_class=None):
+        super(PagedApiPage, self).__init__(response_data)
         self.values = response_data['values']
         if entity_class:
             self.entities = [entity_class(el) for el in self.values]
@@ -35,13 +63,13 @@ class PagedApiPage(object):
             self.next_page_start = response_data['nextPageStart']
 
 
-class StashRepo(object):
+class StashRepo(StashEntity):
     """
     A repository object, exposing everything if you're curious enough to dig through the upstream
     response data, and just the things we care about if you're not.
     """
     def __init__(self, response_data):
-        self._response_data = response_data
+        super(StashRepo, self).__init__(response_data)
         self.id = response_data['id']
         self.slug = response_data['slug']
         self.name = response_data['name']
@@ -51,6 +79,3 @@ class StashRepo(object):
             if protocol == clone_link['name']:
                 return clone_link['href']
         raise Exception("No clone link for protocol %s was found in project %s" % (protocol, self.name))
-
-    def _dump(self):
-        return json.dumps(self._response_data)
