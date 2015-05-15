@@ -44,6 +44,7 @@ def main():
         print "Response unhappy: %s" % str(fail)
         print fail.get_response_errors()
 
+
 def _main():
     from .models import StashRepo
     logging.basicConfig()

@@ -13,6 +13,7 @@ STASH_API_VERSION = '1.0'
 
 _PROJECT_NAMESPACE = 'projects'
 _USER_NAMESPACE = 'users'
+_GROUP_NAMESPACE = 'groups'
 _REPOSITORY_NAMESPACE = 'repos'
 _PERMISSIONS = 'permissions'
 
@@ -34,7 +35,9 @@ class ResponseError(Exception):
             return self.response.json()['errors']
         except Exception as e:
             logging.debug("Failed to read errors from Stash response: %s", str(e))
+            logging.debug("Response text was [%s]", self.response.text)
             return None
+
 
 def set_host(hostname):
     logging.info("Stash host will be %s", hostname)
@@ -108,16 +111,29 @@ def create_repo(repository_name, user=None, project=None):
 
 
 def list_user_permissions(user=None, project=None, filter_on=None):
+    return list_permissions(_USER_NAMESPACE, user=user, project=project, filter_on=filter_on)
+
+
+def list_group_permissions(user=None, project=None, filter_on=None):
+    return list_permissions(_GROUP_NAMESPACE, user=user, project=project, filter_on=filter_on)
+
+
+def list_permissions(grantee_type, user=None, project=None, filter_on=None):
     if project is None:
         raise UserError("Listing project permissions needs a project")
     post_data = {'filter': filter_on} if filter_on else None
-    resp = get(query_params=post_data, user=user, project=project, api_path=[_PERMISSIONS, _USER_NAMESPACE])
+    resp = get(query_params=post_data, user=user, project=project, api_path=[_PERMISSIONS, grantee_type])
     if resp.text:
         values = resp.json()["values"]
         for value in values:
-            print value["user"]["displayName"] + " : " + value["permission"]
+            # not hackish at all....
+            if "user" in value:
+                display_name = value["user"]["displayName"]
+            else:
+                display_name = value["group"]["name"]
+            print "%s : %s" % (display_name, value["permission"])
     else:
-        raise ResponseError("List users attempt failed with status %d: %s" % (resp.status_code, resp.reason))
+        print "List users attempt failed with status %d: %s" % (resp.status_code, resp.reason)
 
 
 def delete_repo(repository_name, user=None, project=None):
