@@ -103,7 +103,36 @@ def get(user=None, project=None, repository=None, api_path=None, query_params=No
     return resp
 
 
-def create_repo(repository_name, user=None, project=None):
+def get_paged(user=None, project=None, repository=None, api_path=None, query_params=None, entity_class=None,
+              limit=None, start=None):
+    response_pages = []
+    request_params = {}
+    if query_params:
+        request_params.update(query_params)
+
+    if start:
+        request_params['start'] = start
+    elif 'start' in request_params:
+        del request_params['start']
+
+    if limit:
+        logging.debug("Using page size limit of %d", limit)
+        request_params['limit'] = limit
+    elif 'limit' in request_params:
+        del request_params['limit']
+
+    while True:
+        resp = get(user=user, project=project, query_params=request_params, api_path=api_path)
+        new_page = PagedApiPage(resp.json(), entity_class)
+        response_pages.append(new_page)
+        if new_page.is_last_page:
+            break
+        else:
+            request_params['start'] = new_page.next_page_start
+    return PagedApiResponse(response_pages)
+
+
+def create_repository(repository_name, user=None, project=None):
     if(repository_name is None):
         raise UserError("You must specify a repository")
     if user is None and project is None:
@@ -115,20 +144,7 @@ def create_repo(repository_name, user=None, project=None):
 def list_repositories(user=None, project=None, limit=None):
     if user is None and project is None:
         raise UserError("Repository list needs a project or a user")
-    response_pages = []
-    request_params = {}
-    if limit:
-        logging.debug("Using page size limit of %d", limit)
-        request_params['limit'] = limit
-    while True:
-        resp = get(user=user, project=project, query_params=request_params, api_path=[_REPOSITORY_NAMESPACE])
-        new_page = PagedApiPage(resp.json(), StashRepo)
-        response_pages.append(new_page)
-        if new_page.is_last_page:
-            break
-        else:
-            request_params['start'] = new_page.next_page_start
-    return PagedApiResponse(response_pages)
+    return get_paged(user, project, api_path=[_REPOSITORY_NAMESPACE], entity_class=StashRepo, limit=limit)
 
 
 def list_user_permissions(user=None, project=None, filter_on=None):

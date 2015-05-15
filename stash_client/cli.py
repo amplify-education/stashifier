@@ -76,7 +76,7 @@ def _main():
         else:
             create_repo_name = args.positional_args[0]
         rest.set_creds(args)
-        resp = rest.create_repo(create_repo_name, user=args.user, project=args.org)
+        resp = rest.create_repository(create_repo_name, user=args.user, project=args.org)
         repo = StashRepo(resp.json())
         print "Successfully created repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
     elif args.list_user_permissions:
