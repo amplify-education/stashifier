@@ -3,6 +3,7 @@ Local models for Stash JSON entities, with such logic and methods as seem approp
 to help us conceal the details of that JSON representation from the rest of the code.
 """
 import json
+from datetime import datetime
 
 
 class StashEntity(object):
@@ -11,6 +12,9 @@ class StashEntity(object):
     """
     def __init__(self, response_data):
         self._response_data = response_data
+
+    def _get(self, key):
+        return self._response_data.get(key)
 
     def _dump(self):
         return json.dumps(self._response_data)
@@ -63,16 +67,48 @@ class PagedApiPage(StashEntity):
             self.next_page_start = response_data['nextPageStart']
 
 
-class StashRepo(StashEntity):
+class StashIdentifiedEntity(StashEntity):
+    """
+    Base class for entities with an id, a slug and a name (project, user, and repo)
+    """
+    def __init__(self, response_data, entity_id=None, slug=None, name=None):
+        super(StashIdentifiedEntity, self).__init__(response_data)
+        self.id = entity_id or self._get("id")
+        self.slug = slug or self._get("slug")
+        self.name = name or self._get("name")
+
+
+class StashUser(StashIdentifiedEntity):
+    """
+    User information from Stash.
+
+    Available fields: display_name, email.
+    Not available (yet?): type, links, active
+    """
+    def __init__(self, *args, **kwargs):
+        super(StashUser, self).__init__(*args, **kwargs)
+        self.display_name = self._get("displayName")
+        self.email = self._get("emailAddress")
+
+
+class StashProject(StashIdentifiedEntity):
+    """
+    A project (which is admittedly a pretty boring object).
+
+    No distinguishing characteristics from a User, other than not being (necessarily) a user.
+    Can actually be a user, under some circumstances...
+    """
+    def __init__(self, *args, **kwargs):
+        super(StashProject, self).__init__(*args, **kwargs)
+
+
+class StashRepo(StashIdentifiedEntity):
     """
     A repository object, exposing everything if you're curious enough to dig through the upstream
     response data, and just the things we care about if you're not.
     """
-    def __init__(self, response_data):
-        super(StashRepo, self).__init__(response_data)
-        self.id = response_data['id']
-        self.slug = response_data['slug']
-        self.name = response_data['name']
+    def __init__(self, *args, **kwargs):
+        super(StashRepo, self).__init__(*args, **kwargs)
 
     def get_clone_url(self, protocol="ssh"):
         for clone_link in self._response_data['links']['clone']:
@@ -89,3 +125,10 @@ class StashPullRequest(StashEntity):
     """
     def __init__(self, response_data):
         super(StashPullRequest, self).__init__(response_data)
+        self.id = self._get("id")
+        self.state = self._get("state")
+        self.title = self._get("title")
+        # force floating-point division to get millisecond precision
+        self.created = datetime.fromtimestamp(self._get("createdDate") / 1000.00)
+        self.updated = datetime.fromtimestamp(self._get("updatedDate") / 1000.00)
+        self.author = StashUser(self._get("author").get("user"))

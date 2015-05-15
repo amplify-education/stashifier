@@ -93,7 +93,9 @@ def _main():
         rest.set_creds(args)
         pr_list = rest.list_pull_requests(project=args.org, user=args.user, repository=args.repo_name)
         for pr in pr_list.entities:
-            print pr._dump()
+            author = pr.author
+            print "'%s' (%d) created at %s by %s (%s)" % (pr.title, pr.id, pr.created,
+                                                          author.display_name, author.email)
     else:
         print "No operation specified."
 
