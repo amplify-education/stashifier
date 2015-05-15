@@ -17,7 +17,7 @@ class StashEntity(object):
         return self._response_data.get(key)
 
     def _dump(self):
-        return json.dumps(self._response_data)
+        return json.dumps(self._response_data, indent=4, sort_keys=True)
 
 
 class PagedApiResponse(object):
@@ -69,16 +69,24 @@ class PagedApiPage(StashEntity):
 
 class StashIdentifiedEntity(StashEntity):
     """
+    Entity with an "id" attribute.  Yes, it's a superclass for that one attribute. Deal.
+    """
+    def __init__(self, response_data, entity_id=None):
+        super(StashIdentifiedEntity, self).__init__(response_data)
+        self.id = entity_id or self._get("id")
+
+
+class StashNamedEntity(StashIdentifiedEntity):
+    """
     Base class for entities with an id, a slug and a name (project, user, and repo)
     """
     def __init__(self, response_data, entity_id=None, slug=None, name=None):
-        super(StashIdentifiedEntity, self).__init__(response_data)
-        self.id = entity_id or self._get("id")
+        super(StashNamedEntity, self).__init__(response_data, entity_id=entity_id)
         self.slug = slug or self._get("slug")
         self.name = name or self._get("name")
 
 
-class StashUser(StashIdentifiedEntity):
+class StashUser(StashNamedEntity):
     """
     User information from Stash.
 
@@ -91,7 +99,7 @@ class StashUser(StashIdentifiedEntity):
         self.email = self._get("emailAddress")
 
 
-class StashProject(StashIdentifiedEntity):
+class StashProject(StashNamedEntity):
     """
     A project (which is admittedly a pretty boring object).
 
@@ -102,13 +110,14 @@ class StashProject(StashIdentifiedEntity):
         super(StashProject, self).__init__(*args, **kwargs)
 
 
-class StashRepo(StashIdentifiedEntity):
+class StashRepo(StashNamedEntity):
     """
     A repository object, exposing everything if you're curious enough to dig through the upstream
     response data, and just the things we care about if you're not.
     """
     def __init__(self, *args, **kwargs):
         super(StashRepo, self).__init__(*args, **kwargs)
+        self.project = StashProject(self._get('project'))
 
     def get_clone_url(self, protocol="ssh"):
         for clone_link in self._response_data['links']['clone']:
@@ -117,7 +126,7 @@ class StashRepo(StashIdentifiedEntity):
         raise Exception("No clone link for protocol %s was found in project %s" % (protocol, self.name))
 
 
-class StashPullRequest(StashEntity):
+class StashPullRequest(StashIdentifiedEntity):
     """
     A pull request, exposing whatever fields it seems useful to expose,
     and hopefully actually at some point also exposing enough mojo to
@@ -125,10 +134,26 @@ class StashPullRequest(StashEntity):
     """
     def __init__(self, response_data):
         super(StashPullRequest, self).__init__(response_data)
-        self.id = self._get("id")
         self.state = self._get("state")
         self.title = self._get("title")
         # force floating-point division to get millisecond precision
         self.created = datetime.fromtimestamp(self._get("createdDate") / 1000.00)
         self.updated = datetime.fromtimestamp(self._get("updatedDate") / 1000.00)
         self.author = StashUser(self._get("author").get("user"))
+        self.source = StashRef(self._get("fromRef"))
+        self.destination = StashRef(self._get("toRef"))
+
+    def is_local(self):
+        return self.source.repository.id == self.destination.repository.id
+
+
+class StashRef(StashIdentifiedEntity):
+    """
+    A branch or commit reference (principally for pull requests, but it could show up in other
+    objects as well).
+    """
+    def __init__(self, response_data):
+        super(StashRef, self).__init__(response_data)
+        self.display_id = self._get("displayId")
+        self.commit_id = self._get("latestChangeSet")
+        self.repository = StashRepo(self._get("repository"))

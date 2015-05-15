@@ -148,12 +148,18 @@ def list_repositories(user=None, project=None, limit=None):
     return get_paged(user, project, api_path=[_REPOSITORY_NAMESPACE], entity_class=StashRepo, limit=limit)
 
 
-def list_pull_requests(user=None, project=None, repository=None):
+def list_pull_requests(user=None, project=None, repository=None, state=None):
     if user is None and project is None:
         raise UserError("Pull request list needs a project or a user")
     if repository is None:
         raise UserError("Pull request list needs a repository name")
-    return get_paged(user, project, repository, api_path=['pull-requests'], entity_class=StashPullRequest)
+    query_params = {}
+    # valid params: "direction" (incoming/outgoing), "at" (fully-qualified branch name), "state", "order",
+    # "withAttributes" (basically count open tasks), "withProperties" (not clear this actually does anything)
+    if state is not None:
+        query_params['state'] = state
+    return get_paged(user, project, repository, api_path=['pull-requests'], query_params=query_params,
+                     entity_class=StashPullRequest)
 
 
 def list_user_permissions(user=None, project=None, filter_on=None):

@@ -30,6 +30,9 @@ def get_cmd_arguments():
                         help="List the permissions for the users of this project")
     parser.add_argument("-prs", "--list-pull-requests", action="store_true", dest="list_pull_requests",
                         help="List open pull requests for this project")
+    parser.add_argument("--pr-state", action="store", dest="pull_request_state",
+                        choices=["OPEN", "DECLINED", "MERGED"],
+                        help="List pull requests with this state (default OPEN)")
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
@@ -91,11 +94,18 @@ def _main():
             print repo.name
     elif args.list_pull_requests:
         rest.set_creds(args)
-        pr_list = rest.list_pull_requests(project=args.org, user=args.user, repository=args.repo_name)
+        pr_list = rest.list_pull_requests(project=args.org, user=args.user, repository=args.repo_name,
+                                          state=args.pull_request_state)
         for pr in pr_list.entities:
             author = pr.author
             print "'%s' (%d) created at %s by %s (%s)" % (pr.title, pr.id, pr.created,
                                                           author.display_name, author.email)
+            if pr.is_local():
+                print "    local merge from source branch %s into %s" % (
+                    pr.source.display_id, pr.destination.display_id)
+            else:
+                print "    merge from remote fork %s, branch %s into local branch %s" % (
+                    pr.source.repository.project.name, pr.source.display_id, pr.destination.display_id)
     else:
         print "No operation specified."
 
