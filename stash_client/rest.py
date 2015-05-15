@@ -173,7 +173,7 @@ def list_permissions(grantee_type, user=None, project=None, filter_on=None):
         print "List users attempt failed with status %d: %s" % (resp.status_code, resp.reason)
 
 
-def delete_repo(repository_name, user=None, project=None):
+def delete_repository(repository_name, user=None, project=None):
     if(repository_name is None):
         raise UserError("You must specify a repository")
     if user is None and project is None:

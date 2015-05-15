@@ -62,19 +62,15 @@ def _main():
     rest.set_host(config.get('server', 'hostname'))
 
     if args.delete:
+        repo_name = get_repo_name(args)
         rest.set_creds(args)
-        resp = rest.delete_repo(args.repo_name, user=args.user, project=args.org)
+        resp = rest.delete_repository(repo_name, user=args.user, project=args.org)
         if resp.text:
             print "Deletion OK: %s" % resp.json().get('message')
         else:
             print "Deletion attempt succeeded with status %d: %s" % (resp.status_code, resp.reason)
     elif args.create:
-        if not args.repo_name and not args.positional_args:
-            raise UserError("Repository name must be specified either with -r or as an additional argument")
-        elif args.repo_name:
-            create_repo_name = args.repo_name
-        else:
-            create_repo_name = args.positional_args[0]
+        create_repo_name = get_repo_name(args)
         rest.set_creds(args)
         resp = rest.create_repository(create_repo_name, user=args.user, project=args.org)
         repo = StashRepo(resp.json())
@@ -93,6 +89,15 @@ def _main():
             print repo.name
     else:
         print "No operation specified."
+
+
+def get_repo_name(args):
+    if not args.repo_name and not args.positional_args:
+        raise UserError("Repository name must be specified either with -r or as an additional argument")
+    elif args.repo_name:
+        return args.repo_name
+    else:
+        return args.positional_args[0]
 
 
 if '__main__' == __name__:
