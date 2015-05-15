@@ -28,6 +28,8 @@ def get_cmd_arguments():
                         help="List repositories available.")
     parser.add_argument("-perm", "--list-user-permissions", action="store_true", dest="list_user_permissions",
                         help="List the permissions for the users of this project")
+    parser.add_argument("-prs", "--list-pull-requests", action="store_true", dest="list_pull_requests",
+                        help="List open pull requests for this project")
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
@@ -87,6 +89,11 @@ def _main():
         print "Retrieved %d repos in %d pages" % (repo_list.entity_count, repo_list.page_count)
         for repo in repo_list.entities:
             print repo.name
+    elif args.list_pull_requests:
+        rest.set_creds(args)
+        pr_list = rest.list_pull_requests(project=args.org, user=args.user, repository=args.repo_name)
+        for pr in pr_list.entities:
+            print pr._dump()
     else:
         print "No operation specified."
 

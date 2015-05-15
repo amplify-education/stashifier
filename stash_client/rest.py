@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from .models import PagedApiPage, PagedApiResponse, StashRepo
+from .models import PagedApiPage, PagedApiResponse, StashRepo, StashPullRequest
 
 # for now, set at runtime from the config file (probably shouldn't be a constant anyway)
 STASH_HOST = None
@@ -122,7 +122,8 @@ def get_paged(user=None, project=None, repository=None, api_path=None, query_par
         del request_params['limit']
 
     while True:
-        resp = get(user=user, project=project, query_params=request_params, api_path=api_path)
+        resp = get(user=user, project=project, repository=repository,
+                   query_params=request_params, api_path=api_path)
         new_page = PagedApiPage(resp.json(), entity_class)
         response_pages.append(new_page)
         if new_page.is_last_page:
@@ -145,6 +146,14 @@ def list_repositories(user=None, project=None, limit=None):
     if user is None and project is None:
         raise UserError("Repository list needs a project or a user")
     return get_paged(user, project, api_path=[_REPOSITORY_NAMESPACE], entity_class=StashRepo, limit=limit)
+
+
+def list_pull_requests(user=None, project=None, repository=None):
+    if user is None and project is None:
+        raise UserError("Pull request list needs a project or a user")
+    if repository is None:
+        raise UserError("Pull request list needs a repository name")
+    return get_paged(user, project, repository, api_path=['pull-requests'], entity_class=StashPullRequest)
 
 
 def list_user_permissions(user=None, project=None, filter_on=None):

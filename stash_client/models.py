@@ -79,3 +79,13 @@ class StashRepo(StashEntity):
             if protocol == clone_link['name']:
                 return clone_link['href']
         raise Exception("No clone link for protocol %s was found in project %s" % (protocol, self.name))
+
+
+class StashPullRequest(StashEntity):
+    """
+    A pull request, exposing whatever fields it seems useful to expose,
+    and hopefully actually at some point also exposing enough mojo to
+    actually get posted back to the server.
+    """
+    def __init__(self, response_data):
+        super(StashPullRequest, self).__init__(response_data)
