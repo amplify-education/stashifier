@@ -20,6 +20,14 @@ class StashEntity(object):
         return json.dumps(self._response_data, indent=4, sort_keys=True)
 
 
+class StashError(StashEntity):
+    def __init__(self, response_data):
+        super(StashError, self).__init__(response_data)
+        self.message = self._get("message")
+        self.exception_name = self._get("exceptionName")
+        self.context = self._get("context")
+
+
 class PagedApiResponse(object):
     """
     Container for multiple PagedApiPage objects.
@@ -142,9 +150,29 @@ class StashPullRequest(StashIdentifiedEntity):
         self.author = StashUser(self._get("author").get("user"))
         self.source = StashRef(self._get("fromRef"))
         self.destination = StashRef(self._get("toRef"))
+        self.reviewers = []
+        self.approved_by = []
+        for review_entry in self._get("reviewers"):
+            reviewer = StashUser(review_entry["user"])
+            self.reviewers.append(reviewer)
+            if review_entry["approved"]:
+                self.approved_by.append(reviewer)
 
     def is_local(self):
         return self.source.repository.id == self.destination.repository.id
+
+    @staticmethod
+    def postable_pull_request(source_branch, destination_branch="master", title=None, description=None):
+        if not title:
+            title = source_branch
+        pr_dict = {'title': title}
+        pr_dict["fromRef"] = {'id': source_branch}
+        pr_dict["toRef"] = {'id': destination_branch}
+        if description:
+            pr_dict["description"] = description
+        return pr_dict
+        # For reference, a PUT can do this:
+        # Update the title, description, reviewers or destination branch of an existing pull request.
 
 
 class StashRef(StashIdentifiedEntity):

@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from .models import PagedApiPage, PagedApiResponse, StashRepo, StashPullRequest
+from .models import PagedApiPage, PagedApiResponse, StashRepo, StashPullRequest, StashError
 
 # for now, set at runtime from the config file (probably shouldn't be a constant anyway)
 STASH_HOST = None
@@ -18,6 +18,7 @@ _USER_NAMESPACE = 'users'
 _GROUP_NAMESPACE = 'groups'
 _REPOSITORY_NAMESPACE = 'repos'
 _PERMISSIONS = 'permissions'
+_PULL_REQUESTS = 'pull-requests'
 
 
 class UserError(Exception):
@@ -34,7 +35,7 @@ class ResponseError(Exception):
 
     def get_response_errors(self):
         try:
-            return self.response.json()['errors']
+            return [StashError(error_json) for error_json in self.response.json()['errors']]
         except Exception as e:
             logging.debug("Failed to read errors from Stash response: %s", str(e))
             logging.debug("Response text was [%s]", self.response.text)
@@ -158,8 +159,13 @@ def list_pull_requests(user=None, project=None, repository=None, state=None):
     # "withAttributes" (basically count open tasks), "withProperties" (not clear this actually does anything)
     if state is not None:
         query_params['state'] = state
-    return get_paged(user, project, repository, api_path=['pull-requests'], query_params=query_params,
+    return get_paged(user, project, repository, api_path=[_PULL_REQUESTS], query_params=query_params,
                      entity_class=StashPullRequest)
+
+
+def create_pull_request(pr_data, user=None, project=None, repository=None):
+    """The hackiest hack that ever hacked"""
+    return post_json(user, project, repository, api_path=[_PULL_REQUESTS], post_data=pr_data)
 
 
 def list_user_permissions(user=None, project=None, filter_on=None):

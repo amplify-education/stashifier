@@ -7,6 +7,7 @@ from ConfigParser import SafeConfigParser
 
 from . import rest
 from .rest import UserError, ResponseError
+from .models import StashPullRequest
 
 
 def get_cmd_arguments():
@@ -33,6 +34,10 @@ def get_cmd_arguments():
     parser.add_argument("--pr-state", action="store", dest="pull_request_state",
                         choices=["OPEN", "DECLINED", "MERGED"],
                         help="List pull requests with this state (default OPEN)")
+    parser.add_argument("--pull-request", action="store_true", dest="create_pr",
+                        help="Create a pull request.")
+    parser.add_argument("--from-branch", action="store", dest="source_branch",
+                        help="Source branch for a pull request")
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
@@ -51,7 +56,11 @@ def main():
         print "Input error: %s" % str(oops)
     except ResponseError as fail:
         print "Response unhappy: %s" % str(fail)
-        print fail.get_response_errors()
+        error_messages = fail.get_response_errors()
+        if error_messages:
+            print "Specific error messages from the server:"
+            for error in error_messages:
+                print "    " + error.message
 
 
 def _main():
@@ -106,6 +115,17 @@ def _main():
             else:
                 print "    merge from remote fork %s, branch %s into local branch %s" % (
                     pr.source.repository.project.name, pr.source.display_id, pr.destination.display_id)
+            if pr.reviewers:
+                print "    Reviewers: %s" % ", ".join([who.display_name for who in pr.reviewers])
+            if pr.approved_by:
+                print "    Approved by: %s" % ", ".join([who.display_name for who in pr.approved_by])
+    elif args.create_pr:
+        rest.set_creds(args)
+        pr_data = StashPullRequest.postable_pull_request(
+            title="Fake Pull Request", source_branch=args.source_branch
+        )
+        print rest.create_pull_request(user=args.user, project=args.org, repository=args.repo_name,
+                                       pr_data=pr_data)
     else:
         print "No operation specified."
 
