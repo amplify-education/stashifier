@@ -169,7 +169,7 @@ class StashPullRequest(StashIdentifiedEntity):
         exist, as design feature, but it's better than doing it inline.
         """
         if not title:
-            title = source_branch
+            title = source_branch.replace("-", " ").replace("_", " ").capitalize()
         pr_dict = {'title': title}
         pr_dict["fromRef"] = {'id': source_branch}
         pr_dict["toRef"] = {'id': destination_branch}

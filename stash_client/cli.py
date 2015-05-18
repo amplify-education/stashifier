@@ -129,7 +129,7 @@ def _main():
         rest.set_creds(args)
         reviewer_names = []
         if args.pr_reviewer_names:
-            reviewer_names = [name.strip() for name in args.reviewer_names.split(",")]
+            reviewer_names = [name.strip() for name in args.pr_reviewer_names.split(",")]
         pr_data = StashPullRequest.postable_pull_request(
             source_branch=args.source_branch,
             description=args.pr_description,
