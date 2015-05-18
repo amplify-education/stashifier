@@ -36,6 +36,8 @@ def get_cmd_arguments():
                         help="List pull requests with this state (default OPEN)")
     parser.add_argument("--pull-request", action="store_true", dest="create_pr",
                         help="Create a pull request.")
+    parser.add_argument("--pr-here", action="store_true", dest="pr_guess_parameters",
+                        help="Use the current project and branch for the pull request")
     parser.add_argument("--pr-reviewers", action="store", dest="pr_reviewer_names",
                         help="Comma-separated list of reviewer usernames")
     parser.add_argument("--pr-title", action="store", dest="pr_title",
@@ -47,6 +49,8 @@ def get_cmd_arguments():
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
+    parser.add_argument("-n", "--dry-run", action="store_true", dest="dry_run",
+                        help="Dry run, don't actually send requests to Stash (not 100% supported)")
     parser.add_argument("-r", "--repo_name", action="store", dest="repo_name",
                         help="The name of the repository.")
     parser.add_argument('positional_args', nargs='*')
@@ -130,14 +134,30 @@ def _main():
         reviewer_names = []
         if args.pr_reviewer_names:
             reviewer_names = [name.strip() for name in args.pr_reviewer_names.split(",")]
+        if args.pr_guess_parameters:
+            # guess based on local git repository information
+            from .local_git import get_project_repo, get_current_branch
+            guesses = get_project_repo()
+            user, project, repo = (guesses[k] for k in ['user', 'project', 'repo'])
+            source_branch = get_current_branch()
+        # command-line args take priority:
+        if args.org or args.user:  # only one should end up set
+            user = args.user
+            project = args.org
+        if args.repo_name:
+            repo = args.repo_name
+        if args.source_branch:
+            source_branch = args.source_branch
         pr_data = StashPullRequest.postable_pull_request(
-            source_branch=args.source_branch,
+            source_branch=source_branch,
             description=args.pr_description,
             title=args.pr_title,
             reviewers=reviewer_names
         )
-        pr_resp = rest.create_pull_request(user=args.user, project=args.org, repository=args.repo_name,
-                                           pr_data=pr_data)
+        if args.dry_run:
+            print pr_data, user, project, repo
+            return
+        pr_resp = rest.create_pull_request(user=user, project=project, repository=repo, pr_data=pr_data)
         created_pr = StashPullRequest(pr_resp.json())
         print "Created pull request '%s' (#%d) at %s" % (created_pr.title, created_pr.id, created_pr.created)
     else:
