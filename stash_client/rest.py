@@ -78,34 +78,44 @@ def create_url(user=None, project=None, repository=None, api_path=None):
     return "/".join(components)
 
 
-def post_json(user=None, project=None, repository=None, api_path=None, post_data=None):
-    if post_data is None:
-        raise Exception("POST data is not actually allowed to be None")
+def _request(method, user=None, project=None, repository=None, api_path=None,
+             request_body=None, query_params=None):
     api_url = create_url(user=user, project=project, repository=repository, api_path=api_path)
-    json_string = json.dumps(post_data)
-    logging.debug("Posting %s to %s", json_string, api_url)
-    resp = requests.api.post(api_url, data=json_string, auth=(USERNAME, PASSWORD),
-                             headers={'Content-type': 'application/json'})
+    resp = requests.api.request(method, api_url,
+                                auth=(USERNAME, PASSWORD),
+                                data=request_body,
+                                params=query_params,
+                                headers={'Content-type': 'application/json'}
+                                )
     if not resp.ok:
-        logging.debug("Failure with response body %s", resp.text)
+        logging.debug("%s request for %s failed with response body %s", method, api_url, resp.text)
         raise ResponseError(resp)
     return resp
+
+
+def _send_json_body(method, user=None, project=None, repository=None, api_path=None, post_data=None):
+    if post_data is None:
+        raise Exception("Message body data is not actually allowed to be None")
+    json_string = json.dumps(post_data)
+    logging.debug("%s of %s to %s", method.upper(), json_string, api_path)
+    return _request(method, user, project, repository, api_path, request_body=json_string)
+
+
+def post_json(user=None, project=None, repository=None, api_path=None, post_data=None):
+    return _send_json_body('post', user, project, repository, api_path, post_data)
+
+
+def put_json(user=None, project=None, repository=None, api_path=None, post_data=None):
+    return _send_json_body('put', user, project, repository, api_path, post_data)
 
 
 def get(user=None, project=None, repository=None, api_path=None, query_params=None):
-    api_url = create_url(user=user, project=project, repository=repository, api_path=api_path)
-    logging.debug("Sending GET query params %s to %s", query_params, api_url)
-    resp = requests.api.get(api_url, params=query_params,
-                            auth=(USERNAME, PASSWORD),
-                            headers={'Content-type': 'application/json'})
-    if not resp.ok:
-        logging.debug("Failure with response body %s", resp.text)
-        raise ResponseError(resp)
-    return resp
+    logging.debug("Sending GET query params %s to %s", query_params, api_path)
+    return _request('get', user, project, repository, api_path, query_params=query_params)
 
 
-def get_paged(user=None, project=None, repository=None, api_path=None, query_params=None, entity_class=None,
-              limit=None, start=None):
+def get_paged(user=None, project=None, repository=None, api_path=None, query_params=None,
+              entity_class=None, limit=None, start=None):
     response_pages = []
     request_params = {}
     if query_params:
@@ -165,6 +175,16 @@ def list_pull_requests(user=None, project=None, repository=None, state=None):
 
 def create_pull_request(pr_data, user=None, project=None, repository=None):
     """The hackiest hack that ever hacked"""
+    # possible attributes of a 409 response errors, for future reference:
+    # option 1:
+    # "context": "reviewers",
+    # "exceptionName": "com.atlassian.stash.pull.InvalidPullRequestReviewersException",
+    # reviewerErrors : [context=username, message=message, exceptionName=null],
+    # validReviewers : [user={user_object}]
+    # option 2
+    #  context: null
+    # "exceptionName": "com.atlassian.stash.pull.DuplicatePullRequestException",
+    # "existingPullRequest": {pr_object}
     return post_json(user, project, repository, api_path=[_PULL_REQUESTS], post_data=pr_data)
 
 
