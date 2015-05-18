@@ -162,7 +162,12 @@ class StashPullRequest(StashIdentifiedEntity):
         return self.source.repository.id == self.destination.repository.id
 
     @staticmethod
-    def postable_pull_request(source_branch, destination_branch="master", title=None, description=None):
+    def postable_pull_request(source_branch, destination_branch="master", title=None, reviewers=None,
+                              description=None):
+        """
+        Generate a dictionary suitable for POST or PUT requests as a pull request.  This should not
+        exist, as design feature, but it's better than doing it inline.
+        """
         if not title:
             title = source_branch
         pr_dict = {'title': title}
@@ -170,6 +175,8 @@ class StashPullRequest(StashIdentifiedEntity):
         pr_dict["toRef"] = {'id': destination_branch}
         if description:
             pr_dict["description"] = description
+        if reviewers:
+            pr_dict["reviewers"] = [{'user': {'name': reviewer_name}} for reviewer_name in reviewers]
         return pr_dict
         # For reference, a PUT can do this:
         # Update the title, description, reviewers or destination branch of an existing pull request.

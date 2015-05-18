@@ -36,6 +36,12 @@ def get_cmd_arguments():
                         help="List pull requests with this state (default OPEN)")
     parser.add_argument("--pull-request", action="store_true", dest="create_pr",
                         help="Create a pull request.")
+    parser.add_argument("--pr-reviewers", action="store", dest="pr_reviewer_names",
+                        help="Comma-separated list of reviewer usernames")
+    parser.add_argument("--pr-title", action="store", dest="pr_title",
+                        help="Pull request title")
+    parser.add_argument("--pr-description", action="store", dest="pr_description",
+                        help="Pull request description (markdown content)")
     parser.add_argument("--from-branch", action="store", dest="source_branch",
                         help="Source branch for a pull request")
     parser.add_argument("-D", action="store_true", dest="delete",
@@ -121,11 +127,19 @@ def _main():
                 print "    Approved by: %s" % ", ".join([who.display_name for who in pr.approved_by])
     elif args.create_pr:
         rest.set_creds(args)
+        reviewer_names = []
+        if args.pr_reviewer_names:
+            reviewer_names = [name.strip() for name in args.reviewer_names.split(",")]
         pr_data = StashPullRequest.postable_pull_request(
-            title="Fake Pull Request", source_branch=args.source_branch
+            source_branch=args.source_branch,
+            description=args.pr_description,
+            title=args.pr_title,
+            reviewers=reviewer_names
         )
-        print rest.create_pull_request(user=args.user, project=args.org, repository=args.repo_name,
-                                       pr_data=pr_data)
+        pr_resp = rest.create_pull_request(user=args.user, project=args.org, repository=args.repo_name,
+                                           pr_data=pr_data)
+        created_pr = StashPullRequest(pr_resp.json())
+        print "Created pull request '%s' (#%d) at %s" % (created_pr.title, created_pr.id, created_pr.created)
     else:
         print "No operation specified."
 
