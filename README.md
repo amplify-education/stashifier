@@ -40,14 +40,16 @@ Creating a new pull request can be by:
     
 Replace -u <mystashuser> with -p <mystashproject> if it isn't a personal repo.
 
-Alternatively, you can have the program guess your arguments based on local settings (the repo, branch, project and user currently in local):
+Alternatively, you can have the program guess your arguments based on local settings (the repo, branch, 
+project and user currently in local):
 
     stash_client --pull-request --pr-here
 
 Add:
     --pr-reviewers <stashusername1>,<stashusername2>, ... <stashusernameX> 
 
-to automatically add reviewers to the pull request.
+to automatically add reviewers to the pull request.  Note that you need to have the branch created in 
+the remote repository before you can create a pull request.
 
 
 Developing the stash client
