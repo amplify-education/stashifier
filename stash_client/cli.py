@@ -7,6 +7,7 @@ from ConfigParser import SafeConfigParser
 
 from . import rest
 from .rest import UserError, ResponseError
+from .models import StashPullRequest
 
 
 def get_cmd_arguments():
@@ -20,13 +21,36 @@ def get_cmd_arguments():
     parser.add_argument("-U", "--override_user", action="store", dest="user_override",
                         help=("Override the local user for accessing stash.  "
                               "If not specified, local user will be used."))
+    parser.add_argument("--page-size", action="store", dest="page_size", type=int,
+                        help="Page size for paged responses")
     parser.add_argument("-C", "--create", action="store_true", dest="create",
                         help="Create a repository.")
+    parser.add_argument("-l", "--list-repos", action="store_true", dest="list_repos",
+                        help="List repositories available.")
     parser.add_argument("-perm", "--list-user-permissions", action="store_true", dest="list_user_permissions",
                         help="List the permissions for the users of this project")
+    parser.add_argument("-prs", "--list-pull-requests", action="store_true", dest="list_pull_requests",
+                        help="List open pull requests for this project")
+    parser.add_argument("--pr-state", action="store", dest="pull_request_state",
+                        choices=["OPEN", "DECLINED", "MERGED"],
+                        help="List pull requests with this state (default OPEN)")
+    parser.add_argument("--pull-request", action="store_true", dest="create_pr",
+                        help="Create a pull request.")
+    parser.add_argument("--pr-here", action="store_true", dest="pr_guess_parameters",
+                        help="Use the current project and branch for the pull request")
+    parser.add_argument("--pr-reviewers", action="store", dest="pr_reviewer_names",
+                        help="Comma-separated list of reviewer usernames")
+    parser.add_argument("--pr-title", action="store", dest="pr_title",
+                        help="Pull request title")
+    parser.add_argument("--pr-description", action="store", dest="pr_description",
+                        help="Pull request description (markdown content)")
+    parser.add_argument("--from-branch", action="store", dest="source_branch",
+                        help="Source branch for a pull request")
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
+    parser.add_argument("-n", "--dry-run", action="store_true", dest="dry_run",
+                        help="Dry run, don't actually send requests to Stash (not 100% supported)")
     parser.add_argument("-r", "--repo_name", action="store", dest="repo_name",
                         help="The name of the repository.")
     parser.add_argument('positional_args', nargs='*')
@@ -42,7 +66,11 @@ def main():
         print "Input error: %s" % str(oops)
     except ResponseError as fail:
         print "Response unhappy: %s" % str(fail)
-        print fail.get_response_errors()
+        error_messages = fail.get_response_errors()
+        if error_messages:
+            print "Specific error messages from the server:"
+            for error in error_messages:
+                print "    " + error.message
 
 
 def _main():
@@ -58,21 +86,17 @@ def _main():
     rest.set_host(config.get('server', 'hostname'))
 
     if args.delete:
+        repo_name = get_repo_name(args)
         rest.set_creds(args)
-        resp = rest.delete_repo(args.repo_name, user=args.user, project=args.org)
+        resp = rest.delete_repository(repo_name, user=args.user, project=args.org)
         if resp.text:
             print "Deletion OK: %s" % resp.json().get('message')
         else:
             print "Deletion attempt succeeded with status %d: %s" % (resp.status_code, resp.reason)
     elif args.create:
-        if not args.repo_name and not args.positional_args:
-            raise UserError("Repository name must be specified either with -r or as an additional argument")
-        elif args.repo_name:
-            create_repo_name = args.repo_name
-        else:
-            create_repo_name = args.positional_args[0]
+        create_repo_name = get_repo_name(args)
         rest.set_creds(args)
-        resp = rest.create_repo(create_repo_name, user=args.user, project=args.org)
+        resp = rest.create_repository(create_repo_name, user=args.user, project=args.org)
         repo = StashRepo(resp.json())
         print "Successfully created repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
     elif args.list_user_permissions:
@@ -81,8 +105,72 @@ def _main():
             filter_on = args.positional_args[0]
         rest.set_creds(args)
         rest.list_user_permissions(project=args.org, filter_on=filter_on)
+    elif args.list_repos:
+        rest.set_creds(args)
+        repo_list = rest.list_repositories(project=args.org, user=args.user, limit=args.page_size)
+        print "Retrieved %d repos in %d pages" % (repo_list.entity_count, repo_list.page_count)
+        for repo in repo_list.entities:
+            print repo.name
+    elif args.list_pull_requests:
+        rest.set_creds(args)
+        pr_list = rest.list_pull_requests(project=args.org, user=args.user, repository=args.repo_name,
+                                          state=args.pull_request_state)
+        for pr in pr_list.entities:
+            author = pr.author
+            print "'%s' (%d) created at %s by %s (%s)" % (pr.title, pr.id, pr.created,
+                                                          author.display_name, author.email)
+            if pr.is_local():
+                print "    local merge from source branch %s into %s" % (
+                    pr.source.display_id, pr.destination.display_id)
+            else:
+                print "    merge from remote fork %s, branch %s into local branch %s" % (
+                    pr.source.repository.project.name, pr.source.display_id, pr.destination.display_id)
+            if pr.reviewers:
+                print "    Reviewers: %s" % ", ".join([who.display_name for who in pr.reviewers])
+            if pr.approved_by:
+                print "    Approved by: %s" % ", ".join([who.display_name for who in pr.approved_by])
+    elif args.create_pr:
+        rest.set_creds(args)
+        reviewer_names = []
+        if args.pr_reviewer_names:
+            reviewer_names = [name.strip() for name in args.pr_reviewer_names.split(",")]
+        if args.pr_guess_parameters:
+            # guess based on local git repository information
+            from .local_git import get_project_repo, get_current_branch
+            guesses = get_project_repo()
+            user, project, repo = (guesses[k] for k in ['user', 'project', 'repo'])
+            source_branch = get_current_branch()
+        # command-line args take priority:
+        if args.org or args.user:  # only one should end up set
+            user = args.user
+            project = args.org
+        if args.repo_name:
+            repo = args.repo_name
+        if args.source_branch:
+            source_branch = args.source_branch
+        pr_data = StashPullRequest.postable_pull_request(
+            source_branch=source_branch,
+            description=args.pr_description,
+            title=args.pr_title,
+            reviewers=reviewer_names
+        )
+        if args.dry_run:
+            print pr_data, user, project, repo
+            return
+        pr_resp = rest.create_pull_request(user=user, project=project, repository=repo, pr_data=pr_data)
+        created_pr = StashPullRequest(pr_resp.json())
+        print "Created pull request '%s' (#%d) at %s" % (created_pr.title, created_pr.id, created_pr.created)
     else:
         print "No operation specified."
+
+
+def get_repo_name(args):
+    if not args.repo_name and not args.positional_args:
+        raise UserError("Repository name must be specified either with -r or as an additional argument")
+    elif args.repo_name:
+        return args.repo_name
+    else:
+        return args.positional_args[0]
 
 
 if '__main__' == __name__:
