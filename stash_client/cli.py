@@ -25,6 +25,8 @@ def get_cmd_arguments():
                         help="Page size for paged responses")
     parser.add_argument("-C", "--create", action="store_true", dest="create",
                         help="Create a repository.")
+    parser.add_argument("-F", "--fork", action="store_true", dest="fork",
+                        help="Create a fork of a repository in your personal project.")
     parser.add_argument("-l", "--list-repos", action="store_true", dest="list_repos",
                         help="List repositories available.")
     parser.add_argument("-perm", "--list-user-permissions", action="store_true", dest="list_user_permissions",
@@ -46,6 +48,8 @@ def get_cmd_arguments():
                         help="Pull request description (markdown content)")
     parser.add_argument("--from-branch", action="store", dest="source_branch",
                         help="Source branch for a pull request")
+    parser.add_argument("--fork-owner", action="store", dest="fork_id",
+                        help="Project (or user namespace) containing a fork (e.g. for a pull request")
     parser.add_argument("-D", action="store_true", dest="delete",
                         help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
@@ -99,6 +103,12 @@ def _main():
         resp = rest.create_repository(create_repo_name, user=args.user, project=args.org)
         repo = StashRepo(resp.json())
         print "Successfully created repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
+    elif args.fork:
+        create_repo_name = get_repo_name(args)
+        rest.set_creds(args)
+        resp = rest.fork_repository(create_repo_name, user=args.user, project=args.org)
+        repo = StashRepo(resp.json())
+        print "Successfully forked repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
     elif args.list_user_permissions:
         filter_on = None
         if args.positional_args:
@@ -149,6 +159,8 @@ def _main():
         if args.source_branch:
             source_branch = args.source_branch
         pr_data = StashPullRequest.postable_pull_request(
+            repository=repo,
+            fork_owner=args.fork_id,
             source_branch=source_branch,
             description=args.pr_description,
             title=args.pr_title,

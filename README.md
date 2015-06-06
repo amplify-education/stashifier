@@ -22,6 +22,10 @@ If your stash user is different from your local user, you can override it by:
 
     stash_client -o <myorganization> -U <myremotestashuser> --create -r <mynewreponame>
 
+To fork an existing repository in your personal project, you can do roughly the same thing:
+
+    stash_client -o <myorganization> -U <myremotestashuser> --fork -r <mynewreponame>
+
 To see other options, just
 
     stash_client -h
@@ -50,6 +54,15 @@ Add:
 
 to automatically add reviewers to the pull request.  Note that you need to have the branch created in 
 the remote repository before you can create a pull request.
+
+To create a pull request from one fork to another, specify the recipient of the request using
+-p/-u, and specify the fork that the changes were made to using --fork-owner:
+
+    --fork-owner ~STASHUSERNAME
+
+or
+
+    --fork-owner product-services
 
 
 Developing the stash client

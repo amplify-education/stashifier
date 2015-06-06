@@ -173,6 +173,19 @@ class StashRestClient(object):
         return PagedApiResponse(response_pages)
 
 
+def fork_repository(repository_name, user=None, project=None):
+    """
+    Create a fork in your personal project
+    """
+    if(repository_name is None):
+        raise UserError("You must specify a repository")
+    if user is None and project is None:
+        raise UserError("forked repository needs a source project or user")
+    post_data = {}
+    return StashRestClient().post_json(post_data=post_data, user=user, project=project,
+                                       api_path=[_REPOSITORY_NAMESPACE, repository_name])
+
+
 def create_repository(repository_name, user=None, project=None):
     if(repository_name is None):
         raise UserError("You must specify a repository")
