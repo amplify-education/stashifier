@@ -21,7 +21,7 @@ def _backtick(*args):
     Run a command and return its output (STDERR and STDOUT).  Raises an exception if the
     command does not exit normally.
     """
-    cmd = args[0] if list == type(args[0]) else args
+    cmd = args[0] if isinstance(type(args[0]),list) else args
     prog = Popen(cmd, stdout=PIPE, stderr=STDOUT)
     # communicate() reads all output then wait()s for the process to exit -- wait() alone can deadlock
     (outdata, _) = prog.communicate()
