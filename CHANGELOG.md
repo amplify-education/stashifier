@@ -1,3 +1,8 @@
+#v0.4.0 2015-06-08
+
+* major refactor of the rest client internals
+* added configuration option for user, command-line option for host
+
 #v0.3.0 2015-06-05
 
 * rudimentary respect for forks
