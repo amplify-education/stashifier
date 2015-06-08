@@ -162,8 +162,8 @@ class StashPullRequest(StashIdentifiedEntity):
         return self.source.repository.id == self.destination.repository.id
 
     @staticmethod
-    def postable_pull_request(repository, source_branch, destination_branch="master", title=None, reviewers=None,
-                              description=None, fork_owner=None):
+    def postable_pull_request(repository, source_branch, destination_branch="master", title=None,
+                              reviewers=None, description=None, fork_owner=None):
         """
         Generate a dictionary suitable for POST or PUT requests as a pull request.  This should not
         exist, as design feature, but it's better than doing it inline.

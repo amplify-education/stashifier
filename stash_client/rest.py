@@ -190,12 +190,14 @@ class StashRestClient(object):
         if user is None and project is None:
             raise UserError("new repository needs a project or a user")
         post_data = {'name': repository_name}
-        return self.post_json(post_data=post_data, user=user, project=project, api_path=[_REPOSITORY_NAMESPACE])
+        return self.post_json(post_data=post_data, user=user, project=project,
+                              api_path=[_REPOSITORY_NAMESPACE])
 
     def list_repositories(self, user=None, project=None, limit=None):
         if user is None and project is None:
             raise UserError("Repository list needs a project or a user")
-        return self.get_paged(user, project, api_path=[_REPOSITORY_NAMESPACE], entity_class=StashRepo, limit=limit)
+        return self.get_paged(user, project,
+                              api_path=[_REPOSITORY_NAMESPACE], entity_class=StashRepo, limit=limit)
 
     def list_pull_requests(self, user=None, project=None, repository=None, state=None):
         if user is None and project is None:
@@ -204,7 +206,7 @@ class StashRestClient(object):
             raise UserError("Pull request list needs a repository name")
         query_params = {}
         # valid params: "direction" (incoming/outgoing), "at" (fully-qualified branch name), "state", "order",
-        # "withAttributes" (basically count open tasks), "withProperties" (not clear this actually does anything)
+        # "withAttributes" (basically count open tasks), "withProperties" (not clear this does anything...)
         if state is not None:
             query_params['state'] = state
         return self.get_paged(user, project, repository, api_path=[_PULL_REQUESTS], query_params=query_params,
@@ -225,16 +227,17 @@ class StashRestClient(object):
         return self.post_json(user, project, repository, api_path=[_PULL_REQUESTS], post_data=pr_data)
 
     def list_user_permissions(self, user=None, project=None, filter_on=None):
-        return list_permissions(_USER_NAMESPACE, user=user, project=project, filter_on=filter_on)
+        return self.list_permissions(_USER_NAMESPACE, user=user, project=project, filter_on=filter_on)
 
     def list_group_permissions(self, user=None, project=None, filter_on=None):
-        return list_permissions(_GROUP_NAMESPACE, user=user, project=project, filter_on=filter_on)
+        return self.list_permissions(_GROUP_NAMESPACE, user=user, project=project, filter_on=filter_on)
 
     def list_permissions(self, grantee_type, user=None, project=None, filter_on=None):
         if project is None:
             raise UserError("Listing project permissions needs a project")
         post_data = {'filter': filter_on} if filter_on else None
-        resp = self.get(query_params=post_data, user=user, project=project, api_path=[_PERMISSIONS, grantee_type])
+        resp = self.get(query_params=post_data, user=user, project=project,
+                        api_path=[_PERMISSIONS, grantee_type])
         if resp.text:
             values = resp.json()["values"]
             for value in values:
