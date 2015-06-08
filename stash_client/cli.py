@@ -5,8 +5,7 @@ import logging
 import os
 from ConfigParser import SafeConfigParser
 
-from . import rest
-from .rest import UserError, ResponseError
+from .rest import UserError, ResponseError, StashRestClient
 from .models import StashPullRequest
 
 
@@ -21,6 +20,9 @@ def get_cmd_arguments():
     parser.add_argument("-U", "--override_user", action="store", dest="user_override",
                         help=("Override the local user for accessing stash.  "
                               "If not specified, local user will be used."))
+    parser.add_argument("-H", "--host", action="store", dest="host_override",
+                        help=("Set the Stash hostname.  If not specified here, the value "
+                              "must be set in .stashclientcfg."))
     parser.add_argument("--page-size", action="store", dest="page_size", type=int,
                         help="Page size for paged responses")
     parser.add_argument("-C", "--create", action="store_true", dest="create",
@@ -54,11 +56,29 @@ def get_cmd_arguments():
                         help="Delete a repository.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Log INFO to STDOUT")
     parser.add_argument("-n", "--dry-run", action="store_true", dest="dry_run",
-                        help="Dry run, don't actually send requests to Stash (not 100% supported)")
+                        help="Dry run, don't actually send requests to Stash")
     parser.add_argument("-r", "--repo_name", action="store", dest="repo_name",
                         help="The name of the repository.")
     parser.add_argument('positional_args', nargs='*')
     return parser.parse_args()
+
+
+def get_client(args, config):
+    server = args.host_override
+    # All this elaborate if-else is because config.get() doesn't take a "default" argument
+    if server is None:
+        if config.has_option('server', 'hostname'):
+            server = config.get('server', 'hostname')
+        else:
+            raise UserError("Server must be set, either via configuration file or command-line option.")
+    username = args.user_override
+    if username is None:
+        if config.has_option('server', 'user'):
+            username = config.get('server', 'user')
+        else:
+            username = os.environ["USER"]
+    logging.debug("User %s will connect to host %s", username, server)
+    return StashRestClient(server, username, dry_run=args.dry_run)
 
 
 def main():
@@ -87,44 +107,38 @@ def _main():
     # silly approach that avoids hard-coding the stash repo
     config = SafeConfigParser()
     config.read(os.path.join(os.environ["HOME"], ".stashclientcfg"))
-    rest.set_host(config.get('server', 'hostname'))
+    client = get_client(args, config)
 
     if args.delete:
         repo_name = get_repo_name(args)
-        rest.set_creds(args)
-        resp = rest.delete_repository(repo_name, user=args.user, project=args.org)
+        resp = client.delete_repository(repo_name, user=args.user, project=args.org)
         if resp.text:
             print "Deletion OK: %s" % resp.json().get('message')
         else:
             print "Deletion attempt succeeded with status %d: %s" % (resp.status_code, resp.reason)
     elif args.create:
         create_repo_name = get_repo_name(args)
-        rest.set_creds(args)
-        resp = rest.create_repository(create_repo_name, user=args.user, project=args.org)
+        resp = client.create_repository(create_repo_name, user=args.user, project=args.org)
         repo = StashRepo(resp.json())
         print "Successfully created repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
     elif args.fork:
         create_repo_name = get_repo_name(args)
-        rest.set_creds(args)
-        resp = rest.fork_repository(create_repo_name, user=args.user, project=args.org)
+        resp = client.fork_repository(create_repo_name, user=args.user, project=args.org)
         repo = StashRepo(resp.json())
         print "Successfully forked repo %s with clone URL %s" % (repo.name, repo.get_clone_url('ssh'))
     elif args.list_user_permissions:
         filter_on = None
         if args.positional_args:
             filter_on = args.positional_args[0]
-        rest.set_creds(args)
-        rest.list_user_permissions(project=args.org, filter_on=filter_on)
+        client.list_user_permissions(project=args.org, filter_on=filter_on)
     elif args.list_repos:
-        rest.set_creds(args)
-        repo_list = rest.list_repositories(project=args.org, user=args.user, limit=args.page_size)
+        repo_list = client.list_repositories(project=args.org, user=args.user, limit=args.page_size)
         print "Retrieved %d repos in %d pages" % (repo_list.entity_count, repo_list.page_count)
         for repo in repo_list.entities:
             print repo.name
     elif args.list_pull_requests:
-        rest.set_creds(args)
-        pr_list = rest.list_pull_requests(project=args.org, user=args.user, repository=args.repo_name,
-                                          state=args.pull_request_state)
+        pr_list = client.list_pull_requests(project=args.org, user=args.user, repository=args.repo_name,
+                                            state=args.pull_request_state)
         for pr in pr_list.entities:
             author = pr.author
             print "'%s' (%d) created at %s by %s (%s)" % (pr.title, pr.id, pr.created,
@@ -139,8 +153,9 @@ def _main():
                 print "    Reviewers: %s" % ", ".join([who.display_name for who in pr.reviewers])
             if pr.approved_by:
                 print "    Approved by: %s" % ", ".join([who.display_name for who in pr.approved_by])
+            if args.verbose:
+                print pr._dump()
     elif args.create_pr:
-        rest.set_creds(args)
         reviewer_names = []
         if args.pr_reviewer_names:
             reviewer_names = [name.strip() for name in args.pr_reviewer_names.split(",")]
@@ -169,7 +184,7 @@ def _main():
         if args.dry_run:
             print pr_data, user, project, repo
             return
-        pr_resp = rest.create_pull_request(user=user, project=project, repository=repo, pr_data=pr_data)
+        pr_resp = client.create_pull_request(user=user, project=project, repository=repo, pr_data=pr_data)
         created_pr = StashPullRequest(pr_resp.json())
         print "Created pull request '%s' (#%d) at %s" % (created_pr.title, created_pr.id, created_pr.created)
     else:

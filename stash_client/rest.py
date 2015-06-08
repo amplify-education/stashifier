@@ -8,9 +8,6 @@ import os
 
 from .models import PagedApiPage, PagedApiResponse, StashRepo, StashPullRequest, StashError
 
-# for now, set at runtime from the config file (probably shouldn't be a constant anyway)
-STASH_HOST = None
-
 STASH_API_VERSION = '1.0'
 
 _PROJECT_NAMESPACE = 'projects'
@@ -42,24 +39,6 @@ class ResponseError(Exception):
             return None
 
 
-def set_host(hostname):
-    logging.info("Stash host will be %s", hostname)
-    global STASH_HOST
-    STASH_HOST = hostname
-
-
-def set_creds(args):
-    import getpass
-
-    username = os.environ["USER"]
-    if args.user_override:
-        username = args.user_override
-    password = getpass.getpass("Stash password for %s: " % username)
-    global USERNAME
-    global PASSWORD
-    (USERNAME, PASSWORD) = (username, password)
-
-
 class StashRestClient(object):
     """
     Encapsulate connection logic and host/user/password information in a nice little object.
@@ -69,11 +48,25 @@ class StashRestClient(object):
         Set up host/username/password information.  If it is not explicitly passed in, assume fallback to the
         old-style global configuration variables.
         """
-        self._host = host or STASH_HOST
-        self._username = username or USERNAME
-        self._password = password or PASSWORD
+        self._host = host
+        self._username = username
+        self._password = password
         self._api_version = api_version
         self._dry_run = dry_run
+
+    def _set_creds(self):
+        '''
+        Guarantee that username and password are configured (once) for this client.
+        If they are already set, return quickly: otherwise, set them, prompting if
+        necessary.
+        '''
+        if self._username and self._password:
+            return
+        from getpass import getpass
+        # username *should* be set already, but in case it isn't, fall back on env
+        if not self._username:
+            self._username = os.environ["USER"]
+        self._password = getpass("Stash password for %s: " % self._username)
 
     def _create_url(self, user=None, project=None, repository=None, api_path=None):
         if user is not None and project is not None:
@@ -101,6 +94,7 @@ class StashRestClient(object):
         If the client was created as a dry-run client, then simply print the method, URL, query parameters
         and request body, and return (which may cause problems for the caller).
         """
+        self._set_creds()
         api_url = self._create_url(user=user, project=project, repository=repository, api_path=api_path)
         if self._dry_run:
             print "%s %s with query %s and body %s" % (method, api_url, query_params, request_body)
@@ -129,6 +123,9 @@ class StashRestClient(object):
         logging.debug("%s of %s to %s", method.upper(), json_string, api_path)
         return self._request(method, user, project, repository, api_path, request_body=json_string)
 
+    ##########
+    # HTTP API
+    ##########
     def post_json(self, user=None, project=None, repository=None, api_path=None, post_data=None):
         return self._send_json_body('post', user, project, repository, api_path, post_data)
 
@@ -172,93 +169,87 @@ class StashRestClient(object):
                 request_params['start'] = new_page.next_page_start
         return PagedApiResponse(response_pages)
 
+    ################
+    # FUNCTIONAL API
+    ################
+    def fork_repository(self, repository_name, user=None, project=None):
+        """
+            Create a fork in your personal project
+        """
+        if(repository_name is None):
+            raise UserError("You must specify a repository")
+        if user is None and project is None:
+            raise UserError("forked repository needs a source project or user")
+        post_data = {}
+        return self.post_json(post_data=post_data, user=user, project=project,
+                              api_path=[_REPOSITORY_NAMESPACE, repository_name])
 
-def fork_repository(repository_name, user=None, project=None):
-    """
-    Create a fork in your personal project
-    """
-    if(repository_name is None):
-        raise UserError("You must specify a repository")
-    if user is None and project is None:
-        raise UserError("forked repository needs a source project or user")
-    post_data = {}
-    return StashRestClient().post_json(post_data=post_data, user=user, project=project,
-                                       api_path=[_REPOSITORY_NAMESPACE, repository_name])
+    def create_repository(self, repository_name, user=None, project=None):
+        if(repository_name is None):
+            raise UserError("You must specify a repository")
+        if user is None and project is None:
+            raise UserError("new repository needs a project or a user")
+        post_data = {'name': repository_name}
+        return self.post_json(post_data=post_data, user=user, project=project, api_path=[_REPOSITORY_NAMESPACE])
 
+    def list_repositories(self, user=None, project=None, limit=None):
+        if user is None and project is None:
+            raise UserError("Repository list needs a project or a user")
+        return self.get_paged(user, project, api_path=[_REPOSITORY_NAMESPACE], entity_class=StashRepo, limit=limit)
 
-def create_repository(repository_name, user=None, project=None):
-    if(repository_name is None):
-        raise UserError("You must specify a repository")
-    if user is None and project is None:
-        raise UserError("new repository needs a project or a user")
-    post_data = {'name': repository_name}
-    return StashRestClient().post_json(post_data=post_data, user=user, project=project, api_path=[_REPOSITORY_NAMESPACE])
+    def list_pull_requests(self, user=None, project=None, repository=None, state=None):
+        if user is None and project is None:
+            raise UserError("Pull request list needs a project or a user")
+        if repository is None:
+            raise UserError("Pull request list needs a repository name")
+        query_params = {}
+        # valid params: "direction" (incoming/outgoing), "at" (fully-qualified branch name), "state", "order",
+        # "withAttributes" (basically count open tasks), "withProperties" (not clear this actually does anything)
+        if state is not None:
+            query_params['state'] = state
+        return self.get_paged(user, project, repository, api_path=[_PULL_REQUESTS], query_params=query_params,
+                              entity_class=StashPullRequest)
 
+    def create_pull_request(self, pr_data, user=None, project=None, repository=None):
+        """The hackiest hack that ever hacked"""
+        # possible attributes of a 409 response errors, for future reference:
+        # option 1:
+        # "context": "reviewers",
+        # "exceptionName": "com.atlassian.stash.pull.InvalidPullRequestReviewersException",
+        # reviewerErrors : [context=username, message=message, exceptionName=null],
+        # validReviewers : [user={user_object}]
+        # option 2
+        #  context: null
+        # "exceptionName": "com.atlassian.stash.pull.DuplicatePullRequestException",
+        # "existingPullRequest": {pr_object}
+        return self.post_json(user, project, repository, api_path=[_PULL_REQUESTS], post_data=pr_data)
 
-def list_repositories(user=None, project=None, limit=None):
-    if user is None and project is None:
-        raise UserError("Repository list needs a project or a user")
-    return StashRestClient().get_paged(user, project, api_path=[_REPOSITORY_NAMESPACE], entity_class=StashRepo, limit=limit)
+    def list_user_permissions(self, user=None, project=None, filter_on=None):
+        return list_permissions(_USER_NAMESPACE, user=user, project=project, filter_on=filter_on)
 
+    def list_group_permissions(self, user=None, project=None, filter_on=None):
+        return list_permissions(_GROUP_NAMESPACE, user=user, project=project, filter_on=filter_on)
 
-def list_pull_requests(user=None, project=None, repository=None, state=None):
-    if user is None and project is None:
-        raise UserError("Pull request list needs a project or a user")
-    if repository is None:
-        raise UserError("Pull request list needs a repository name")
-    query_params = {}
-    # valid params: "direction" (incoming/outgoing), "at" (fully-qualified branch name), "state", "order",
-    # "withAttributes" (basically count open tasks), "withProperties" (not clear this actually does anything)
-    if state is not None:
-        query_params['state'] = state
-    return StashRestClient().get_paged(user, project, repository, api_path=[_PULL_REQUESTS], query_params=query_params,
-                                       entity_class=StashPullRequest)
+    def list_permissions(self, grantee_type, user=None, project=None, filter_on=None):
+        if project is None:
+            raise UserError("Listing project permissions needs a project")
+        post_data = {'filter': filter_on} if filter_on else None
+        resp = self.get(query_params=post_data, user=user, project=project, api_path=[_PERMISSIONS, grantee_type])
+        if resp.text:
+            values = resp.json()["values"]
+            for value in values:
+                # not hackish at all....
+                if "user" in value:
+                    display_name = value["user"]["displayName"]
+                else:
+                    display_name = value["group"]["name"]
+                print "%s : %s" % (display_name, value["permission"])
+        else:
+            print "List users attempt failed with status %d: %s" % (resp.status_code, resp.reason)
 
-
-def create_pull_request(pr_data, user=None, project=None, repository=None):
-    """The hackiest hack that ever hacked"""
-    # possible attributes of a 409 response errors, for future reference:
-    # option 1:
-    # "context": "reviewers",
-    # "exceptionName": "com.atlassian.stash.pull.InvalidPullRequestReviewersException",
-    # reviewerErrors : [context=username, message=message, exceptionName=null],
-    # validReviewers : [user={user_object}]
-    # option 2
-    #  context: null
-    # "exceptionName": "com.atlassian.stash.pull.DuplicatePullRequestException",
-    # "existingPullRequest": {pr_object}
-    return StashRestClient().post_json(user, project, repository, api_path=[_PULL_REQUESTS], post_data=pr_data)
-
-
-def list_user_permissions(user=None, project=None, filter_on=None):
-    return list_permissions(_USER_NAMESPACE, user=user, project=project, filter_on=filter_on)
-
-
-def list_group_permissions(user=None, project=None, filter_on=None):
-    return list_permissions(_GROUP_NAMESPACE, user=user, project=project, filter_on=filter_on)
-
-
-def list_permissions(grantee_type, user=None, project=None, filter_on=None):
-    if project is None:
-        raise UserError("Listing project permissions needs a project")
-    post_data = {'filter': filter_on} if filter_on else None
-    resp = StashRestClient().get(query_params=post_data, user=user, project=project, api_path=[_PERMISSIONS, grantee_type])
-    if resp.text:
-        values = resp.json()["values"]
-        for value in values:
-            # not hackish at all....
-            if "user" in value:
-                display_name = value["user"]["displayName"]
-            else:
-                display_name = value["group"]["name"]
-            print "%s : %s" % (display_name, value["permission"])
-    else:
-        print "List users attempt failed with status %d: %s" % (resp.status_code, resp.reason)
-
-
-def delete_repository(repository_name, user=None, project=None):
-    if(repository_name is None):
-        raise UserError("You must specify a repository")
-    if user is None and project is None:
-        raise UserError("deleting a repository needs a project or a user")
-    return StashRestClient().delete(user=user, project=project, repository=repository_name)
+    def delete_repository(self, repository_name, user=None, project=None):
+        if(repository_name is None):
+            raise UserError("You must specify a repository")
+        if user is None and project is None:
+            raise UserError("deleting a repository needs a project or a user")
+        return self.delete(user=user, project=project, repository=repository_name)
