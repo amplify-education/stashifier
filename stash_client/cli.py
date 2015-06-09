@@ -81,11 +81,14 @@ def get_client(args, config):
     return StashRestClient(server, username, dry_run=args.dry_run)
 
 
-def main():
+def cli_wrap(func):
     try:
-        _main()
+        rv = func()
+        if rv is None:
+            rv = 0
+        exit(rv)
     except KeyboardInterrupt:
-        pass
+        exit(127)
     except UserError as oops:
         print "Input error: %s" % str(oops)
     except ResponseError as fail:
@@ -95,9 +98,11 @@ def main():
             print "Specific error messages from the server:"
             for error in error_messages:
                 print "    " + error.message
+    exit(1)
 
 
-def _main():
+@cli_wrap
+def main():
     from .models import StashRepo
     logging.basicConfig()
     args = get_cmd_arguments()
