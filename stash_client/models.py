@@ -21,6 +21,9 @@ class StashEntity(object):
 
 
 class StashError(StashEntity):
+    """
+    A JSON encoded error message from Stash.
+    """
     def __init__(self, response_data):
         super(StashError, self).__init__(response_data)
         self.message = self._get("message")
@@ -128,6 +131,10 @@ class StashRepo(StashNamedEntity):
         self.project = StashProject(self._get('project'))
 
     def get_clone_url(self, protocol="ssh"):
+        """
+        Search the "links" data for this repository for a clone URL that uses
+        the given protocol (e.g. https or ssh).
+        """
         for clone_link in self._response_data['links']['clone']:
             if protocol == clone_link['name']:
                 return clone_link['href']
@@ -159,6 +166,9 @@ class StashPullRequest(StashIdentifiedEntity):
                 self.approved_by.append(reviewer)
 
     def is_local(self):
+        """
+        Test if this pull request is within a single repository, rather than being from a fork.
+        """
         return self.source.repository.id == self.destination.repository.id
 
     @staticmethod
