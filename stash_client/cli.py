@@ -83,10 +83,10 @@ def get_client(args, config):
 
 def cli_wrap(func):
     try:
-        rv = func()
-        if rv is None:
-            rv = 0
-        exit(rv)
+        retval = func()
+        if retval is None:
+            retval = 0
+        exit(retval)
     except KeyboardInterrupt:
         exit(127)
     except UserError as oops:
@@ -103,6 +103,8 @@ def cli_wrap(func):
 
 @cli_wrap
 def main():
+    # This is the giant omnibus dispatcher: it will have too many branches, guaranteed
+    # pylint: disable=R0912,R0914,R0915
     from .models import StashRepo
     logging.basicConfig()
     args = get_cmd_arguments()
@@ -144,22 +146,23 @@ def main():
     elif args.list_pull_requests:
         pr_list = client.list_pull_requests(project=args.org, user=args.user, repository=args.repo_name,
                                             state=args.pull_request_state)
-        for pr in pr_list.entities:
-            author = pr.author
-            print "'%s' (%d) created at %s by %s (%s)" % (pr.title, pr.id, pr.created,
+        for pull_req in pr_list.entities:
+            author = pull_req.author
+            print "'%s' (%d) created at %s by %s (%s)" % (pull_req.title, pull_req.id, pull_req.created,
                                                           author.display_name, author.email)
-            if pr.is_local():
+            if pull_req.is_local():
                 print "    local merge from source branch %s into %s" % (
-                    pr.source.display_id, pr.destination.display_id)
+                    pull_req.source.display_id, pull_req.destination.display_id)
             else:
                 print "    merge from remote fork %s, branch %s into local branch %s" % (
-                    pr.source.repository.project.name, pr.source.display_id, pr.destination.display_id)
-            if pr.reviewers:
-                print "    Reviewers: %s" % ", ".join([who.display_name for who in pr.reviewers])
-            if pr.approved_by:
-                print "    Approved by: %s" % ", ".join([who.display_name for who in pr.approved_by])
+                    pull_req.source.repository.project.name, pull_req.source.display_id,
+                    pull_req.destination.display_id)
+            if pull_req.reviewers:
+                print "    Reviewers: %s" % ", ".join([who.display_name for who in pull_req.reviewers])
+            if pull_req.approved_by:
+                print "    Approved by: %s" % ", ".join([who.display_name for who in pull_req.approved_by])
             if args.verbose:
-                print pr._dump()
+                print pull_req._dump()
     elif args.create_pr:
         reviewer_names = []
         if args.pr_reviewer_names:

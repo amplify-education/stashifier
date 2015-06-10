@@ -19,10 +19,18 @@ _PULL_REQUESTS = 'pull-requests'
 
 
 class UserError(Exception):
+    """
+    An error in user input: the message should be shown to the user before we exit.
+    """
     pass
 
 
 class ResponseError(Exception):
+    """
+    A wrapper around a Stash HTTP response from the API.  In most cases, stringifying
+    will be reasonably informative, but in some cases examining the wrapped list of
+    StashError objects may be useful.
+    """
     def __init__(self, response):
         self.response = response
 
@@ -33,8 +41,8 @@ class ResponseError(Exception):
     def get_response_errors(self):
         try:
             return [StashError(error_json) for error_json in self.response.json()['errors']]
-        except Exception as e:
-            logging.debug("Failed to read errors from Stash response: %s", str(e))
+        except Exception as exc:
+            logging.debug("Failed to read errors from Stash response: %s", str(exc))
             logging.debug("Response text was [%s]", self.response.text)
             return None
 

@@ -81,7 +81,7 @@ class StashIdentifiedEntity(StashEntity):
     """
     def __init__(self, response_data, entity_id=None):
         super(StashIdentifiedEntity, self).__init__(response_data)
-        self.id = entity_id or self._get("id")
+        self.id = entity_id or self._get("id")  # pylint: disable=C0103
 
 
 class StashNamedEntity(StashIdentifiedEntity):
