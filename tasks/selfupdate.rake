@@ -1,29 +1,26 @@
 module Selfupdate
-  TEMPLATE_PROJECT_URL = "git@github.wgenhq.net:Disco/disco_eggs_template"
+  TEMPLATE_PROJECT_URL = "ssh://git@git.amplify.com/disco/disco_eggs_template"
   TEMPLATE_PROJECT_BRANCH = "master"
   TEMPLATE_BASE_PATH = "disco_eggs_template/templates/amplify_egg"
-  TEMPLATE_UPDATE_GLOB = "rakefile tasks/*.rake tasks/*.rb tasks/lint/*rc tasks/lint/*.py jenkins/*.sh"
 end
 
 namespace "selfupdate" do
-  desc "Pull down new rake task definitions from Github"
+  desc "Pull down new and updated rake task definitions from the template repository"
   task :pull do
     warn("Selfupdate will overwrite custom rake tasks and jenkins scripts")
     if confirm "Shall I continue the update?" then
       tempdir = `mktemp -d /tmp/rake-selfupdate-XXXXXX`.strip
       projdir = Dir.pwd
-      sh "git clone #{Selfupdate::TEMPLATE_PROJECT_URL} #{tempdir}"
+      sh "git archive --remote=#{Selfupdate::TEMPLATE_PROJECT_URL} #{Selfupdate::TEMPLATE_PROJECT_BRANCH} #{Selfupdate::TEMPLATE_BASE_PATH} | tar -C #{tempdir} -xf -"
       sh <<-EOS
       set -e
+      echo "Syncing tasks and related files from upstream..."
+      rsync -rvt #{tempdir}/#{Selfupdate::TEMPLATE_BASE_PATH}/{rakefile,tasks} .
+      rsync -rvt #{tempdir}/#{Selfupdate::TEMPLATE_BASE_PATH}/jenkins/*.sh jenkins
+      echo Done.
+
       cd #{tempdir}
-      git checkout #{Selfupdate::TEMPLATE_PROJECT_BRANCH}
       cd #{Selfupdate::TEMPLATE_BASE_PATH}
-      # Update rakefile and tasks/*
-      for f in #{Selfupdate::TEMPLATE_UPDATE_GLOB}
-      do
-        echo "Updating file: $f"
-        cp "$f" "#{projdir}/$f"
-      done
       # Update requirements
       for REQ in requirements.pip test-requirements.pip
       do
@@ -44,6 +41,7 @@ namespace "selfupdate" do
 
       notice("Rake tasks updated.")
       puts "Use 'git status' to see what has changed."
+      puts "PLEASE NOTE: if 'selfupdate.rake' has changed, you should run this task again!"
     end
   end
 

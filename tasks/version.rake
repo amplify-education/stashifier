@@ -1,31 +1,17 @@
 module Version
-  def self.var_regex(varname)
-    /(#{varname}\s+=\s+[\"'])([^\"']*)([\"'])/
-  end
 
-  # Replaces the second group in the given regex
-  # with the given value, on each line.
-  def self.set_var_in_lines(lines, regex, value)
-    lines.map {|line|
-      line.gsub(regex, "\\1#{value}\\3")
-    }
-  end
-
-  def self.inject_variable(filename, regex, value)
-    lines = IO.readlines(filename)
-    updated_lines = set_var_in_lines(lines, regex, value)
-    File.open(filename, 'w') do |f|
-      f.puts updated_lines
-    end
+  def self.inject_variable(filename, flag, value)
+    result = system 'tasks/version/inject_variable.py', flag, value, filename
+    raise (lowlight("Version injection failed")) if not result
   end
 
   def self.inject_git_hash
-    inject_variable(VERSION_FILE, GIT_HASH_REGEX, get_git_hash)
+    inject_variable(VERSION_FILE, '-g', get_git_hash)
   end
 
   def self.inject_rpm_version
     rpm_version = "#{get_package_version}-#{get_rpm_build}"
-    inject_variable(VERSION_FILE, RPM_VERSION_REGEX, rpm_version)
+    inject_variable(VERSION_FILE, '-r', rpm_version)
   end
 
   def self.get_package_version
@@ -40,9 +26,6 @@ module Version
   def self.get_rpm_build
     ENV['RPM_BUILD'] or raise(lowlight("RPM_BUILD is not set"))
   end
-
-  GIT_HASH_REGEX = var_regex('__git_hash__')
-  RPM_VERSION_REGEX = var_regex('__rpm_version__')
 
   VERSION_FILE = "#{ProjectPaths::PACKAGE_DIR}/version.py"
 end
