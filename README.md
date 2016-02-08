@@ -1,7 +1,7 @@
-stash_client
+stashifier
 ============
 
-Stash client library for Amplify utilities.
+Stash client library and command-line client.
 
 Using the stash client
 ----------------------
