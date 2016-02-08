@@ -63,6 +63,19 @@ def get_cmd_arguments():
     return parser.parse_args()
 
 
+def get_repo_name(args):
+    """
+    Get the repository name to be operated on, assuming that it is either the "repo_name" field
+    of the args object or the first positional argument.
+    """
+    if not args.repo_name and not args.positional_args:
+        raise UserError("Repository name must be specified either with -r or as an additional argument")
+    elif args.repo_name:
+        return args.repo_name
+    else:
+        return args.positional_args[0]
+
+
 def get_client(args, config):
     server = args.host_override
     # All this elaborate if-else is because config.get() doesn't take a "default" argument
@@ -197,15 +210,6 @@ def main():
         print "Created pull request '%s' (#%d) at %s" % (created_pr.title, created_pr.id, created_pr.created)
     else:
         print "No operation specified."
-
-
-def get_repo_name(args):
-    if not args.repo_name and not args.positional_args:
-        raise UserError("Repository name must be specified either with -r or as an additional argument")
-    elif args.repo_name:
-        return args.repo_name
-    else:
-        return args.positional_args[0]
 
 
 if '__main__' == __name__:
