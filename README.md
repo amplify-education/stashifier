@@ -3,6 +3,9 @@ stashifier
 
 Stash client library and command-line client.
 
+This module is distributed under the Apache License, version 2.0
+(http://www.apache.org/licenses/LICENSE-2.0).
+
 Using the stash client
 ----------------------
 
