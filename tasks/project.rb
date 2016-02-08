@@ -1,8 +1,8 @@
 module Project
   # Standard variables
-  PACKAGE = "stash_client"
-  PROJECT = "stash_client"
-  EGG = "stash_client"
+  PACKAGE = "stashifier"
+  PROJECT = "stashifier"
+  EGG = "stashifier"
 
   # Custom variables
   CODE_TYPE = 'library'

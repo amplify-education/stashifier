@@ -11,7 +11,7 @@ VERSION_REGEX = re.compile(r"""
     ['"](?P<version>.*?)['"]
 """, re.MULTILINE | re.VERBOSE)
 
-MODULE_NAME = "stash_client"
+MODULE_NAME = "stashifier"
 VERSION_FILE = os.path.join(MODULE_NAME, "version.py")
 
 

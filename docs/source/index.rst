@@ -1,7 +1,7 @@
-stash_client documentation
+stashifier documentation
 ==========================
 
-.. automodule:: stash_client
+.. automodule:: stashifier
 
 API documentation
 =================
@@ -9,7 +9,7 @@ API documentation
 .. toctree::
    :maxdepth: 4
 
-   stash_client
+   stashifier
 
 
 Indices and tables
